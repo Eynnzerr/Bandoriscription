@@ -1,0 +1,17 @@
+ktor:
+    application:
+        modules:
+            - com.eynnzerr.ApplicationKt.module
+    deployment:
+        port: 18080
+
+storage:
+    driverClassName: "org.h2.Driver"
+    jdbcURL: "jdbc:h2:file:./build/db"
+
+jwt:
+    secret: "your-secret-key-here"
+    # Environment variable override: JWT_SECRET
+    issuer: "bandoriscription"
+    audience: "bandoriscription-users"
+    realm: "Access to bandoriscription"
