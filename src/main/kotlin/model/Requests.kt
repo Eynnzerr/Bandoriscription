@@ -33,3 +33,9 @@ enum class MessageType {
     ACCESS_RESULT,
     ERROR
 }
+
+@Serializable
+data class BlacklistRequest(val blockedUserId: String)
+
+@Serializable
+data class WhitelistRequest(val allowedUserId: String)

@@ -74,6 +74,12 @@ class UserRepository {
         insertStatement.resultedValues?.singleOrNull() != null
     }
 
+    suspend fun removeFromWhiteList(userId: String, allowedUserId: String): Boolean = DatabaseFactory.dbQuery {
+        WhiteList.deleteWhere {
+            (WhiteList.userId eq userId) and (BlackList.blockedUserId eq allowedUserId)
+        } > 0
+    }
+
     suspend fun isInWhiteList(userId: String, targetUserId: String): Boolean = DatabaseFactory.dbQuery {
         WhiteList.selectAll()
             .where { (WhiteList.userId eq userId) and (WhiteList.allowedUserId eq targetUserId) }

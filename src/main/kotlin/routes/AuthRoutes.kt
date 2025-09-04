@@ -4,9 +4,9 @@ import com.eynnzerr.data.UserRepository
 import com.eynnzerr.model.UserRegisterRequest
 import com.eynnzerr.model.UserRegisterResponse
 import com.eynnzerr.utils.JwtConfig
-import io.ktor.http.*
+import com.eynnzerr.utils.respondSuccess
+import io.ktor.server.application.*
 import io.ktor.server.request.*
-import io.ktor.server.response.*
 import io.ktor.server.routing.*
 
 fun Route.authRoutes() {
@@ -27,7 +27,7 @@ fun Route.authRoutes() {
             userRepository.updateUser(request.userId, token)
         }
 
-        call.respond(HttpStatusCode.OK, UserRegisterResponse(
+        call.respondSuccess(UserRegisterResponse(
             token = token,
             expiresIn = 30L * 24 * 60 * 60 * 1000 // 30天
         ))

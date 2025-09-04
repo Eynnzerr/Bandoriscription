@@ -3,13 +3,11 @@ package com.eynnzerr.model
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.javatime.datetime
-import java.time.LocalDateTime
 
 object Users : Table("users") {
     val id = varchar("id", 128)
     val token = varchar("token", 512)
     val inviteCode = varchar("invite_code", 128).nullable()
-    val autoApprove = bool("auto_approve").default(false)
     val createdAt = datetime("created_at")
     val updatedAt = datetime("updated_at")
 
