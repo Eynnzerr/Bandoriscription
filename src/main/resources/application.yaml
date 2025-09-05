@@ -7,7 +7,7 @@ ktor:
 
 storage:
     driverClassName: "org.h2.Driver"
-    jdbcURL: "jdbc:h2:file:./build/db"
+    jdbcURL: "jdbc:h2:file:./build/db;AUTO_SERVER=TRUE"
 
 jwt:
     secret: "your-secret-key-here"

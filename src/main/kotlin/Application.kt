@@ -2,6 +2,7 @@ package com.eynnzerr
 
 import com.eynnzerr.plugins.configureAuthentication
 import com.eynnzerr.plugins.configureDatabases
+import com.eynnzerr.plugins.configureMonitoring
 import com.eynnzerr.plugins.configureSerialization
 import com.eynnzerr.plugins.configureWebSockets
 import io.ktor.server.application.*
@@ -11,6 +12,7 @@ fun main(args: Array<String>) {
 }
 
 fun Application.module() {
+    configureMonitoring()
     configureAuthentication()
     configureWebSockets()
     configureSerialization()

@@ -52,13 +52,7 @@ Authorization: Bearer {token}
 Content-Type: application/json
 
 {
-  "roomInfo": {
-    "roomNumber": "123456",
-    "additionalInfo": {
-      "gameMode": "5级150 e长",
-      "players": "q1"
-    }
-  }
+  "roomNumber": "123456"
 }
 
 Response:
@@ -82,8 +76,7 @@ Response:
 {
   "success": true,
   "roomInfo": {
-    "roomNumber": "123456",
-    "additionalInfo": {...}
+    "roomNumber": "123456"
   }
 }
 ```

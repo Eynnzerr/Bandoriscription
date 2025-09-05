@@ -5,7 +5,6 @@ import com.eynnzerr.data.UserRepository
 import com.eynnzerr.model.*
 import com.eynnzerr.utils.respondFailure
 import com.eynnzerr.utils.respondSuccess
-import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.*
@@ -22,12 +21,15 @@ fun Route.roomRoutes() {
                 val userId = principal!!.payload.getClaim("userId").asString()
 
                 val request = call.receive<UploadRoomRequest>()
-                val success = roomRepository.saveRoom(userId, request.roomInfo)
+                val room = RoomInfo(
+                    roomNumber = request.roomNumber,
+                )
+                val success = roomRepository.saveRoom(userId, room)
 
                 if (success) {
-                    call.respondSuccess("房间信息已保存")
+                    call.respondSuccess("实际车牌已转存")
                 } else {
-                    call.respondFailure("保存失败")
+                    call.respondFailure("实际车牌转存加密服务器失败")
                 }
             }
 
@@ -48,7 +50,7 @@ fun Route.roomRoutes() {
                 if (inviteCode == request.inviteCode) {
                     val roomInfo = roomRepository.getRoom(request.targetUserId)
                     if (roomInfo != null) {
-                        call.respondSuccess(roomInfo)
+                        call.respondSuccess(RoomResponse(roomInfo.roomNumber))
                     } else {
                         call.respondFailure("房间不存在")
                     }

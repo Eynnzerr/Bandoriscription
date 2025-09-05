@@ -24,7 +24,7 @@ data class RoomInfo(
 
 @Serializable
 data class UploadRoomRequest(
-    val roomInfo: RoomInfo
+    val roomNumber: String,
 )
 
 @Serializable
@@ -35,7 +35,5 @@ data class VerifyInviteCodeRequest(
 
 @Serializable
 data class RoomResponse(
-    val success: Boolean,
-    val roomInfo: RoomInfo? = null,
-    val message: String? = null
+    val number: String,
 )
