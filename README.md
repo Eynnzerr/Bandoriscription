@@ -215,7 +215,7 @@ docker run -p 8080:8080 -e JWT_SECRET=your-secret-key bandoriscription
 ```kotlin
 // 注册获取Token
 suspend fun register(userId: String, originalToken: String): String {
-    val response = httpClient.post("http://server:8080/register") {
+    val response = httpClient.post("http://server:18080/register") {
         contentType(ContentType.Application.Json)
         setBody(UserRegisterRequest(userId, originalToken))
     }
@@ -226,7 +226,7 @@ suspend fun register(userId: String, originalToken: String): String {
 val webSocketSession = httpClient.webSocketSession(
     method = HttpMethod.Get,
     host = "server",
-    port = 8080,
+    port = 18080,
     path = "/ws"
 ) {
     header("Authorization", "Bearer $token")
@@ -252,14 +252,14 @@ suspend fun requestRoomAccess(targetUserId: String) {
 
 ## TODO
 
-1. [] **生产环境修改JWT密钥**
-2. [] **使用HTTPS保护API通信**
-3. [] **使用WSS保护WebSocket通信**
-4. [] **实施请求频率限制防止暴力破解**
-5. [] **定期清理过期的房间信息**
-6. [] **考虑添加验证码机制**
-7. [] **邀请码有效期**：设置邀请码过期时间
-8. [] **访问日志**：记录所有访问请求便于审计
-9. [] **批量管理**：支持批量添加/删除黑白名单
-10. [] **统计功能**：房间访问统计、拒绝率等
-11. [] **推送通知**：离线时的访问请求推送
+1. [ ] **生产环境修改JWT密钥**
+2. [ ] **使用HTTPS保护API通信**
+3. [ ] **使用WSS保护WebSocket通信**
+4. [ ] **实施请求频率限制防止暴力破解**
+5. [ ] **定期清理过期的房间信息**
+6. [ ] **考虑添加验证码机制**
+7. [ ] **邀请码有效期**：设置邀请码过期时间
+8. [ ] **访问日志**：记录所有访问请求便于审计
+9. [ ] **批量管理**：支持批量添加/删除黑白名单
+10. [ ] **统计功能**：房间访问统计、拒绝率等
+11. [ ] **推送通知**：离线时的访问请求推送
