@@ -55,8 +55,8 @@ data class RoomAccessRequest(
 data class RoomAccessResponse(
     val requestId: String,
     val approved: Boolean,
-    val roomNumber: String?,
-    val message: String?
+    val roomNumber: String? = null,
+    val message: String? = null,
 )
 
 object WebSocketActions {

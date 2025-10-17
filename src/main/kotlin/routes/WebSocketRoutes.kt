@@ -14,8 +14,10 @@ import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import org.slf4j.LoggerFactory
 
 fun Route.webSocketRoutes() {
+    val logger = LoggerFactory.getLogger("WebSocketRoutes")
     val userRepository = UserRepository()
     val roomRepository = RoomRepository()
 
@@ -39,11 +41,13 @@ fun Route.webSocketRoutes() {
         }
 
         WebSocketManager.addConnection(userId, this)
+        logger.info("New connection for user {}", userId)
 
         try {
             incoming.consumeEach { frame ->
                 if (frame is Frame.Text) {
                     val text = frame.readText()
+                    logger.info("Received request from user {}: {}", userId, text)
                     val request = Json.decodeFromString<WebSocketRequest<JsonElement>>(text)
 
                     when (request.action) {
@@ -147,7 +151,7 @@ fun Route.webSocketRoutes() {
                 }
             }
         } catch (e: Exception) {
-            println("WebSocket error for user $userId: ${e.localizedMessage}")
+            logger.error("WebSocket error for user $userId: ${e.localizedMessage}")
         } finally {
             WebSocketManager.removeConnection(userId)
         }
