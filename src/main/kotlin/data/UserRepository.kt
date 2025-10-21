@@ -85,4 +85,16 @@ class UserRepository {
             .where { (WhiteList.userId eq userId) and (WhiteList.allowedUserId eq targetUserId) }
             .count() > 0
     }
+
+    suspend fun getBlacklist(userId: String): List<String> = DatabaseFactory.dbQuery {
+        BlackList.selectAll()
+            .where { BlackList.userId eq userId }
+            .map { it[BlackList.blockedUserId] }
+    }
+
+    suspend fun getWhitelist(userId: String): List<String> = DatabaseFactory.dbQuery {
+        WhiteList.selectAll()
+            .where { WhiteList.userId eq userId }
+            .map { it[WhiteList.allowedUserId] }
+    }
 }

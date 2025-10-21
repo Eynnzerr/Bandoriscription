@@ -147,5 +147,17 @@ fun Route.roomRoutes() {
                 }
             }
         }
+
+        route("/lists") {
+            post {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asString()
+
+                val blacklist = userRepository.getBlacklist(userId)
+                val whitelist = userRepository.getWhitelist(userId)
+
+                call.respondSuccess(UserListsResponse(blacklist, whitelist))
+            }
+        }
     }
 }

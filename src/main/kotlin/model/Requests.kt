@@ -6,4 +6,4 @@ import kotlinx.serialization.Serializable
 data class BlacklistRequest(val blockedUserId: String)
 
 @Serializable
-data class WhitelistRequest(val allowedUserId: String)
+data class   WhitelistRequest(val allowedUserId: String)

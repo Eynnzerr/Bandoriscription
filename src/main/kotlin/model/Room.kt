@@ -37,3 +37,9 @@ data class VerifyInviteCodeRequest(
 data class RoomResponse(
     val number: String,
 )
+
+@Serializable
+data class UserListsResponse(
+    val blacklist: List<String>,
+    val whitelist: List<String>
+)
