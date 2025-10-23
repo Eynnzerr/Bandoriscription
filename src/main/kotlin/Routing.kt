@@ -22,8 +22,12 @@ import org.koin.logger.slf4jLogger
 
 fun Application.configureRouting() {
     routing {
-        authRoutes()
-        roomRoutes()
-        webSocketRoutes()
+        route("/bandori/api") {
+            authRoutes()
+            roomRoutes()
+        }
+        route("/bandori/ws") {
+            webSocketRoutes()
+        }
     }
 }

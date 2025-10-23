@@ -21,7 +21,7 @@ fun Route.webSocketRoutes() {
     val userRepository = UserRepository()
     val roomRepository = RoomRepository()
 
-    webSocket("/ws") {
+    webSocket("/connect") {
         val token = call.request.headers["Authorization"]?.removePrefix("Bearer ")
         if (token == null) {
             close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "未授权"))
