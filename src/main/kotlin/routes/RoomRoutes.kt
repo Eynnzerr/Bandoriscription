@@ -9,10 +9,11 @@ import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.*
 import io.ktor.server.routing.*
+import org.koin.ktor.ext.inject
 
 fun Route.roomRoutes() {
-    val userRepository = UserRepository()
-    val roomRepository = RoomRepository()
+    val userRepository by inject<UserRepository>()
+    val roomRepository by inject<RoomRepository>()
 
     authenticate("auth-jwt") {
         route("/room") {

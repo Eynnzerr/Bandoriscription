@@ -6,14 +6,12 @@ import com.eynnzerr.model.UserRegisterResponse
 import com.eynnzerr.utils.JwtConfig
 import com.eynnzerr.utils.respondFailure
 import com.eynnzerr.utils.respondSuccess
-import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.routing.*
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.server.response.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.koin.ktor.ext.inject
@@ -24,7 +22,7 @@ import kotlinx.serialization.json.JsonElement
 data class ExternalApiResponse(val status: String, val response: JsonElement? = null)
 
 fun Route.authRoutes() {
-    val userRepository = UserRepository()
+    val userRepository by inject<UserRepository>()
     val httpClient by inject<HttpClient>()
 
     post("/register") {

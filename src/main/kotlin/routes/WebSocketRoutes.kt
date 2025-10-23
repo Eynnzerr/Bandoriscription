@@ -14,12 +14,13 @@ import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import org.koin.ktor.ext.inject
 import org.slf4j.LoggerFactory
 
 fun Route.webSocketRoutes() {
     val logger = LoggerFactory.getLogger("WebSocketRoutes")
-    val userRepository = UserRepository()
-    val roomRepository = RoomRepository()
+    val userRepository by inject<UserRepository>()
+    val roomRepository by inject<RoomRepository>()
 
     webSocket("/connect") {
         val token = call.request.headers["Authorization"]?.removePrefix("Bearer ")
