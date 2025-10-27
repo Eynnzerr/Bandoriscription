@@ -17,10 +17,14 @@ import kotlinx.serialization.json.JsonElement
 import org.koin.ktor.ext.inject
 import org.slf4j.LoggerFactory
 
+import java.util.concurrent.ConcurrentHashMap
+
 fun Route.webSocketRoutes() {
     val logger = LoggerFactory.getLogger("WebSocketRoutes")
     val userRepository by inject<UserRepository>()
     val roomRepository by inject<RoomRepository>()
+    val requestTimestamps = ConcurrentHashMap<String, Long>()
+    val cooldownMillis = 5000L // 5 seconds
 
     webSocket("/connect") {
         val token = call.request.headers["Authorization"]?.removePrefix("Bearer ")
@@ -53,6 +57,20 @@ fun Route.webSocketRoutes() {
 
                     when (request.action) {
                         WebSocketActions.REQUEST_ACCESS -> {
+                            // 频率检查
+                            val lastRequestTime = requestTimestamps[userId]
+                            val currentTime = System.currentTimeMillis()
+                            if (lastRequestTime != null && (currentTime - lastRequestTime) < cooldownMillis) {
+                                val errorResponse = WebSocketResponse(
+                                    status = "failure",
+                                    action = WebSocketActions.ERROR,
+                                    response = "请求过于频繁，请稍后再试"
+                                )
+                                send(Json.encodeToString(errorResponse))
+                                return@consumeEach
+                            }
+                            requestTimestamps[userId] = currentTime
+
                             val requestData = Json.decodeFromJsonElement(RoomAccessRequest.serializer(), request.data!!)
 
                             // 检查黑名单

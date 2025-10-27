@@ -5,6 +5,7 @@ import com.eynnzerr.plugins.configureDatabases
 import com.eynnzerr.plugins.configureFrameworks
 import com.eynnzerr.plugins.configureHTTP
 import com.eynnzerr.plugins.configureMonitoring
+import com.eynnzerr.plugins.configureRateLimiting
 import com.eynnzerr.plugins.configureSerialization
 import com.eynnzerr.plugins.configureWebSockets
 import com.eynnzerr.tasks.configureCleanup
@@ -16,6 +17,7 @@ fun main(args: Array<String>) {
 
 fun Application.module() {
     configureMonitoring()
+    configureRateLimiting()
     configureAuthentication()
     configureWebSockets()
     configureSerialization()
