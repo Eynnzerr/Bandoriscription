@@ -24,12 +24,12 @@ data class ExternalApiResponse(val status: String, val response: JsonElement? = 
 fun Route.authRoutes() {
     val userRepository by inject<UserRepository>()
     val httpClient by inject<HttpClient>()
+    val externalApiUrl = application.environment.config.property("bandoristation.externalApiUrl").getString()
 
     post("/register") {
         val request = call.receive<UserRegisterRequest>()
 
         // 使用用户携带的车站token向车站发起账号信息请求，观察结果，从而验证身份有效性
-        val externalApiUrl = "https://server.bandoristation.com"
         val externalApiRequestBody = mapOf(
             "function_group" to "MainAction",
             "function" to "initializeAccountSetting"
@@ -51,14 +51,12 @@ fun Route.authRoutes() {
 
                     val user = userRepository.getUserById(request.userId)
                     if (user == null) {
-                        userRepository.createUser(request.userId, token)
-                    } else {
-                        userRepository.updateUser(request.userId, token)
+                        userRepository.createUser(request.userId)
                     }
 
                     call.respondSuccess(UserRegisterResponse(
                         token = token,
-                        expiresIn = 30L * 24 * 60 * 60 * 1000 // 30天
+                        expiresIn = JwtConfig.VALIDITY_IN_MS
                     ))
                 } else {
                     call.respondFailure("Invalid token from BandoriStation.", HttpStatusCode.Unauthorized)

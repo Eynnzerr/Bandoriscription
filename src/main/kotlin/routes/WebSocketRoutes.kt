@@ -30,7 +30,7 @@ fun Route.webSocketRoutes() {
         }
 
         val userId = try {
-            val verifier = JWT.require(Algorithm.HMAC256(JwtConfig.SECRET))
+            val verifier = JWT.require(Algorithm.HMAC512(JwtConfig.SECRET))
                 .withAudience(JwtConfig.AUDIENCE)
                 .withIssuer(JwtConfig.ISSUER)
                 .build()

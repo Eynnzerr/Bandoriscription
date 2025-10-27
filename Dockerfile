@@ -5,6 +5,10 @@ RUN gradle build
 
 FROM openjdk:17-jre-alpine
 WORKDIR /app
-COPY --from=build /home/gradle/project/build/libs/bandoriscription-0.0.1-all.jar .
-EXPOSE 8080
-CMD ["java", "-jar", "bandoriscription-0.0.1-all.jar"]
+RUN apk --no-cache add curl
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
+COPY --chown=appuser:appgroup --from=build /home/gradle/project/build/libs/*-all.jar app.jar
+EXPOSE 18080
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD curl -f http://localhost:18080/health || exit 1
+CMD ["java", "-jar", "app.jar"]

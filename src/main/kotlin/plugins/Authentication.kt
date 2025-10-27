@@ -8,12 +8,13 @@ import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
 
 fun Application.configureAuthentication() {
+    JwtConfig.init(environment.config)
     install(Authentication) {
         jwt("auth-jwt") {
             realm = JwtConfig.REALM
             verifier(
                 JWT
-                    .require(Algorithm.HMAC256(JwtConfig.SECRET))
+                    .require(Algorithm.HMAC512(JwtConfig.SECRET))
                     .withAudience(JwtConfig.AUDIENCE)
                     .withIssuer(JwtConfig.ISSUER)
                     .build()

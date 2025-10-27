@@ -8,19 +8,17 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import java.time.LocalDateTime
 
 class UserRepository {
-    suspend fun createUser(userId: String, token: String): Boolean = DatabaseFactory.dbQuery {
+    suspend fun createUser(userId: String): Boolean = DatabaseFactory.dbQuery {
         val insertStatement = Users.insert {
             it[id] = userId
-            it[this.token] = token
             it[createdAt] = LocalDateTime.now()
             it[updatedAt] = LocalDateTime.now()
         }
         insertStatement.resultedValues?.singleOrNull() != null
     }
 
-    suspend fun updateUser(userId: String, token: String): Boolean = DatabaseFactory.dbQuery {
+    suspend fun updateUser(userId: String): Boolean = DatabaseFactory.dbQuery {
         Users.update({ Users.id eq userId }) {
-            it[this.token] = token
             it[updatedAt] = LocalDateTime.now()
         } > 0
     }

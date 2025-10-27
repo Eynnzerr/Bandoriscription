@@ -22,6 +22,9 @@ import org.koin.logger.slf4jLogger
 
 fun Application.configureRouting() {
     routing {
+        get("/health") {
+            call.respond(HttpStatusCode.OK)
+        }
         route("/bandori/api") {
             authRoutes()
             roomRoutes()

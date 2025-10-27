@@ -6,12 +6,18 @@ ktor:
         port: 18080
 
 storage:
-    driverClassName: "org.h2.Driver"
-    jdbcURL: "jdbc:h2:file:./build/db;AUTO_SERVER=TRUE"
+    driverClassName: "org.postgresql.Driver"
+    jdbcURL: "jdbc:postgresql://localhost:5432/bandoriscription" # Modify if needed
+    user: "postgres" # Environment variable override: DB_USER
+    password: "309309" # Environment variable override: DB_PASSWORD
+    maximumPoolSize: 10
+
+bandoristation:
+    externalApiUrl: "https://server.bandoristation.com"
 
 jwt:
-    secret: "your-secret-key-here"
+    secret: "123456"
     # Environment variable override: JWT_SECRET
     issuer: "bandoriscription"
-    audience: "bandoriscription-users"
+    audience: "bandoristation_mobile"
     realm: "Access to bandoriscription"

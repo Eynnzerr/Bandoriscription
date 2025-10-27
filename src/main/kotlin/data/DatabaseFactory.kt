@@ -1,33 +1,35 @@
 package com.eynnzerr.data
 
-import com.eynnzerr.model.BlackList
-import com.eynnzerr.model.Rooms
-import com.eynnzerr.model.Users
-import com.eynnzerr.model.WhiteList
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import io.ktor.server.config.*
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.flywaydb.core.Flyway
 
 object DatabaseFactory {
     fun init(config: ApplicationConfig) {
         val driverClassName = config.property("storage.driverClassName").getString()
         val jdbcURL = config.property("storage.jdbcURL").getString()
-        val database = Database.connect(createHikariDataSource(jdbcURL, driverClassName))
+        val user = System.getenv("DB_USER") ?: config.property("storage.user").getString()
+        val password = System.getenv("DB_PASSWORD") ?: config.property("storage.password").getString()
+        val maximumPoolSize = config.property("storage.maximumPoolSize").getString().toInt()
+        val dataSource = createHikariDataSource(jdbcURL, driverClassName, user, password, maximumPoolSize)
 
-        transaction(database) {
-            SchemaUtils.create(Users, Rooms, BlackList, WhiteList)
-        }
+        val flyway = Flyway.configure().dataSource(dataSource).load()
+        flyway.migrate()
+
+        val database = Database.connect(dataSource)
     }
 
-    private fun createHikariDataSource(url: String, driver: String): HikariDataSource {
+    private fun createHikariDataSource(url: String, driver: String, user: String, pass: String, poolSize: Int): HikariDataSource {
         val config = HikariConfig().apply {
             driverClassName = driver
             jdbcUrl = url
-            maximumPoolSize = 3
+            username = user
+            password = pass
+            maximumPoolSize = poolSize
             isAutoCommit = false
             transactionIsolation = "TRANSACTION_REPEATABLE_READ"
             validate()
