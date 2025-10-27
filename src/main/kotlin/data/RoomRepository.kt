@@ -5,6 +5,7 @@ import com.eynnzerr.model.Rooms
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.less
 import java.time.LocalDateTime
 
 class RoomRepository {
@@ -44,5 +45,10 @@ class RoomRepository {
 
     suspend fun deleteRoom(userId: String): Boolean = DatabaseFactory.dbQuery {
         Rooms.deleteWhere { Rooms.userId eq userId } > 0
+    }
+
+    suspend fun deleteOutdatedRooms(retentionDays: Long): Int = DatabaseFactory.dbQuery {
+        val cutoff = LocalDateTime.now().minusDays(retentionDays)
+        Rooms.deleteWhere { Rooms.createdAt less cutoff }
     }
 }

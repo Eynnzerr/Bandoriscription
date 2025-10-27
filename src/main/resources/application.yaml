@@ -15,6 +15,10 @@ storage:
 bandoristation:
     externalApiUrl: "https://server.bandoristation.com"
 
+cleanup:
+  retention_days: 1
+  interval_hours: 24
+
 jwt:
     secret: "123456"
     # Environment variable override: JWT_SECRET

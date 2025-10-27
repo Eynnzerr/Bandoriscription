@@ -7,6 +7,7 @@ import com.eynnzerr.plugins.configureHTTP
 import com.eynnzerr.plugins.configureMonitoring
 import com.eynnzerr.plugins.configureSerialization
 import com.eynnzerr.plugins.configureWebSockets
+import com.eynnzerr.tasks.configureCleanup
 import io.ktor.server.application.*
 
 fun main(args: Array<String>) {
@@ -22,4 +23,5 @@ fun Application.module() {
     configureFrameworks()
     configureHTTP()
     configureRouting()
+    configureCleanup()
 }
