@@ -11,7 +11,9 @@ fun Application.configureHTTP() {
         allowMethod(HttpMethod.Delete)
         allowMethod(HttpMethod.Patch)
         allowHeader(HttpHeaders.Authorization)
-        allowHeader("MyCustomHeader")
-        anyHost() // @TODO: Don't do this in production if possible. Try to limit it.
+        val allowedHosts = this@configureHTTP.environment.config.propertyOrNull("cors.allowedHosts")?.getList() ?: emptyList()
+        allowedHosts.forEach { host ->
+            allowHost(host, schemes = listOf("http", "https"))
+        }
     }
 }

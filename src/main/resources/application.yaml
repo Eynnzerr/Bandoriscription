@@ -7,9 +7,9 @@ ktor:
 
 storage:
     driverClassName: "org.postgresql.Driver"
-    jdbcURL: "jdbc:postgresql://localhost:5432/bandoriscription" # Modify if needed
-    user: "postgres" # Environment variable override: DB_USER
-    password: "309309" # Environment variable override: DB_PASSWORD
+    jdbcURL: "jdbc:postgresql://localhost:5432/bandoriscription" # TO BE db:5432
+    user: "changeme" # Environment variable override: DB_USER
+    password: "changeme" # Environment variable override: DB_PASSWORD
     maximumPoolSize: 10
 
 bandoristation:
@@ -20,8 +20,12 @@ cleanup:
   interval_hours: 24
 
 jwt:
-    secret: "123456"
     # Environment variable override: JWT_SECRET
     issuer: "bandoriscription"
     audience: "bandoristation_mobile"
     realm: "Access to bandoriscription"
+
+cors:
+  allowedHosts:
+    - "localhost:8080"
+    - "eynnzerr.top"
