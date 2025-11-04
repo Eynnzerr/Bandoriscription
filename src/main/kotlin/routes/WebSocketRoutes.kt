@@ -20,7 +20,7 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 
 fun Route.webSocketRoutes() {
-    val logger = LoggerFactory.getLogger("WebSocketRoutes")
+    val logger = LoggerFactory.getLogger("API_CALL")
     val userRepository by inject<UserRepository>()
     val roomRepository by inject<RoomRepository>()
     val requestTimestamps = ConcurrentHashMap<String, Long>()
@@ -46,13 +46,13 @@ fun Route.webSocketRoutes() {
         }
 
         WebSocketManager.addConnection(userId, this)
-        logger.info("New connection for user {}", userId)
+        logger.info("New websocket connection for user id {}", userId)
 
         try {
             incoming.consumeEach { frame ->
                 if (frame is Frame.Text) {
                     val text = frame.readText()
-                    logger.info("Received request from user {}: {}", userId, text)
+                    logger.info("Received websocket request text from user id {}: {}", userId, text)
                     val request = Json.decodeFromString<WebSocketRequest<JsonElement>>(text)
 
                     when (request.action) {
@@ -86,7 +86,7 @@ fun Route.webSocketRoutes() {
                                     )
                                 )
                                 send(Json.encodeToString(response))
-                                return@consumeEach
+                                 return@consumeEach
                             }
 
                             // 检查白名单

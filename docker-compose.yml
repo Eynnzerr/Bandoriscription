@@ -30,6 +30,8 @@ services:
       JWT_SECRET: "${JWT_SECRET}"
       DB_USER: "${DB_USER}"
       DB_PASSWORD: "${DB_PASSWORD}"
+    volumes:
+      - ./logs:/app/logs
 
 volumes:
   postgres_data:

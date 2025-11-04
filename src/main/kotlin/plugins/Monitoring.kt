@@ -6,11 +6,13 @@ import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.request.*
 import io.ktor.server.plugins.doublereceive.*
 import kotlinx.coroutines.runBlocking
+import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
 
 fun Application.configureMonitoring() {
     install(DoubleReceive)
     install(CallLogging) {
+        logger = LoggerFactory.getLogger("API_CALL")
         level = Level.INFO
         format { call ->
             val path = call.request.path()
