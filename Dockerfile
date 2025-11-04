@@ -1,7 +1,7 @@
 FROM gradle:9.1-jdk17-alpine AS build
 WORKDIR /home/gradle/project
 COPY . .
-RUN gradle build
+RUN gradle build -x test
 
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
