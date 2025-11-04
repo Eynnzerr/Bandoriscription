@@ -3,7 +3,7 @@ WORKDIR /home/gradle/project
 COPY . .
 RUN gradle build
 
-FROM openjdk:17-jre-alpine
+FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 RUN apk --no-cache add curl
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
