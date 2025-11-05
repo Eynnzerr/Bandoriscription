@@ -58,7 +58,13 @@
 
 ### 启动服务
 
-在项目根目录下，执行以下命令来构建并启动所有服务（应用和数据库）：
+在项目根目录下，执行以下命令来构应用镜像：
+
+```bash
+docker build -t bandoriscription-app:latest .
+```
+
+执行以下命令来启动所有服务（应用和数据库）：
 
 ```bash
 docker-compose up -d --build
