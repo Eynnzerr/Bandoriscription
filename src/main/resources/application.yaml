@@ -6,8 +6,9 @@ ktor:
         port: 18080
 
 storage:
+    migrationLocation: "classpath:db/migration"
     driverClassName: "org.postgresql.Driver"
-    jdbcURL: "jdbc:postgresql://localhost:5432/bandoriscription" # TO BE db:5432
+    jdbcURL: "jdbc:postgresql://db:5432/bandoriscription"
     user: "changeme" # Environment variable override: DB_USER
     password: "changeme" # Environment variable override: DB_PASSWORD
     maximumPoolSize: 10

@@ -17,7 +17,9 @@ object DatabaseFactory {
         val maximumPoolSize = config.property("storage.maximumPoolSize").getString().toInt()
         val dataSource = createHikariDataSource(jdbcURL, driverClassName, user, password, maximumPoolSize)
 
-        val flyway = Flyway.configure().dataSource(dataSource).load()
+        val flyway = Flyway.configure()
+            .dataSource(dataSource)
+            .load()
         flyway.migrate()
 
         val database = Database.connect(dataSource)
