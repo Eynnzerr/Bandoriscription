@@ -1,6 +1,7 @@
 package com.eynnzerr
 
 import com.eynnzerr.routes.authRoutes
+import com.eynnzerr.routes.chatRoutes
 import com.eynnzerr.routes.roomRoutes
 import com.eynnzerr.routes.webSocketRoutes
 import io.ktor.http.*
@@ -19,6 +20,7 @@ fun Application.configureRouting() {
             route("/bandori/api") {
                 authRoutes()
                 roomRoutes()
+                chatRoutes()
             }
             route("/bandori/ws") {
                 webSocketRoutes()

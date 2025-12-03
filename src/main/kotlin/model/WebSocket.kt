@@ -1,6 +1,7 @@
 package com.eynnzerr.model
 
 import kotlinx.serialization.Serializable
+import com.eynnzerr.model.UserInfo // Import UserInfo from Response.kt
 
 /**
  * WebSocket请求消息
@@ -60,9 +61,56 @@ data class RoomAccessResponse(
 )
 
 object WebSocketActions {
+    // 车牌加密相关
     const val REQUEST_ACCESS = "request_access" // app -> server 用户发起车牌查看请求时调用
     const val RESPOND_ACCESS = "respond_access" // app -> server 房主收到查看请求且批准/拒绝后调用
     const val ACCESS_REQUEST_RECEIVED = "access_request_received" // server -> app 向房主发送某用户的查看请求
     const val ACCESS_RESULT = "access_result" // server -> app 向用户发送房主批复结果
     const val ERROR = "error" // server -> app 调用错误
+
+    // 车内聊天相关
+    const val SEND_CHAT_MESSAGE = "send_chat_message" // app -> server 用户发送消息到聊天群
+    const val NEW_CHAT_MESSAGE = "new_chat_message" // server -> app 用户接收聊天群新消息
+    const val USER_JOINED_CHAT = "user_joined_chat" // server -> app 用户接收新用户加入通知
+    const val USER_LEFT_CHAT = "user_left_chat" // server -> app 用户接收其他用户离开通知
+    const val USER_REMOVED_FROM_CHAT = "user_removed_from_chat" // server -> app 用户接收其他用户被移出通知
+    const val CHAT_DISBANDED = "chat_disbanded" // server -> app 用户接收聊天室解散通知
 }
+
+@Serializable
+data class SendChatMessageRequest(
+    val content: String,
+    val username: String,
+    val avatar: String,
+)
+
+@Serializable
+data class NewChatMessagePayload(
+    val groupId: String,
+    val message: ChatMessageInfo
+)
+
+@Serializable
+data class ChatMessageInfo(
+    val id: Long,
+    val sender: UserInfo,
+    val content: String,
+    val username: String,
+    val avatar: String,
+    val createdAt: String // ISO 8601 format
+)
+
+@Serializable
+data class UserJoinedChatPayload(
+    val groupId: String,
+    val user: UserInfo
+)
+
+@Serializable
+data class UserLeftChatPayload(
+    val groupId: String,
+    val userId: String
+)
+
+@Serializable
+data class ChatDisbandedPayload(val groupId: String)

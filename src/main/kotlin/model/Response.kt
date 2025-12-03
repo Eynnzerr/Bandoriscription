@@ -19,3 +19,19 @@ sealed class ApiResponseContent {
     @Serializable
     data class ObjectContent(val data: JsonElement) : ApiResponseContent()
 }
+
+@Serializable
+data class CreateChatResponse(val groupId: String)
+
+@Serializable
+data class UserInfo(val id: String)
+
+@Serializable
+data class ChatMessageResponse(
+    val id: Long,
+    val sender: UserInfo,
+    val content: String,
+    val username: String,
+    val avatar: String,
+    val createdAt: String
+)

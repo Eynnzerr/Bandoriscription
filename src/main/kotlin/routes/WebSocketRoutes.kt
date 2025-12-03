@@ -2,6 +2,7 @@ package com.eynnzerr.routes
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.eynnzerr.data.ChatGroupRepository
 import com.eynnzerr.data.RoomRepository
 import com.eynnzerr.data.UserRepository
 import com.eynnzerr.model.*
@@ -23,6 +24,8 @@ fun Route.webSocketRoutes() {
     val logger = LoggerFactory.getLogger("API_CALL")
     val userRepository by inject<UserRepository>()
     val roomRepository by inject<RoomRepository>()
+    val chatGroupRepository by inject<ChatGroupRepository>()
+    val webSocketManager by inject<WebSocketManager>()
     val requestTimestamps = ConcurrentHashMap<String, Long>()
     val cooldownMillis = 5000L // 5 seconds
 
@@ -45,7 +48,7 @@ fun Route.webSocketRoutes() {
             return@webSocket
         }
 
-        WebSocketManager.addConnection(userId, this)
+        webSocketManager.addConnection(userId, this)
         logger.info("New websocket connection for user id {}", userId)
 
         try {
@@ -107,7 +110,7 @@ fun Route.webSocketRoutes() {
                             }
 
                             // 发送请求给目标用户
-                            val responseChannel = WebSocketManager.sendAccessRequest(requestData.targetUserId, requestData)
+                            val responseChannel = webSocketManager.sendAccessRequest(requestData.targetUserId, requestData)
 
                             // 等待响应，超时时间30秒
                             val response = withTimeoutOrNull(30000) {
@@ -144,7 +147,7 @@ fun Route.webSocketRoutes() {
                                         message = "房主同意了你的请求"
                                     )
                                 )
-                                WebSocketManager.handleAccessResponse(responseData.requestId, approvedResponse)
+                                webSocketManager.handleAccessResponse(responseData.requestId, approvedResponse)
                             } else {
                                 val deniedResponse = WebSocketResponse(
                                     status = "success",
@@ -154,7 +157,58 @@ fun Route.webSocketRoutes() {
                                         message = "房主拒绝了您的请求"
                                     )
                                 )
-                                WebSocketManager.handleAccessResponse(responseData.requestId, deniedResponse)
+                                webSocketManager.handleAccessResponse(responseData.requestId, deniedResponse)
+                            }
+                        }
+
+                        WebSocketActions.SEND_CHAT_MESSAGE -> {
+                            val requestData = Json.decodeFromJsonElement(SendChatMessageRequest.serializer(), request.data!!)
+
+                            // Get the group the user is in
+                            val userGroup = chatGroupRepository.getChatGroupForUser(userId)
+                            if (userGroup == null) {
+                                val errorResponse = WebSocketResponse(
+                                    status = "failure",
+                                    action = WebSocketActions.ERROR,
+                                    response = "您当前不在任何群聊中，无法发送消息"
+                                )
+                                webSocketManager.sendMessageToUser(userId, errorResponse)
+                                return@consumeEach
+                            }
+
+                            val chatMessage = chatGroupRepository.addChatMessage(
+                                groupId = userGroup.id,
+                                userId = userId,
+                                content = requestData.content,
+                                username = requestData.username,
+                                avatar = requestData.avatar
+                            )
+                            if (chatMessage != null) {
+                                val messagePayload = NewChatMessagePayload(
+                                    groupId = userGroup.id,
+                                    message = ChatMessageInfo(
+                                        id = chatMessage.id,
+                                        sender = UserInfo(id = chatMessage.userId),
+                                        content = chatMessage.content,
+                                        username = chatMessage.username,
+                                        avatar = chatMessage.avatar,
+                                        createdAt = chatMessage.createdAt
+                                    )
+
+                                )
+                                val successResponse = WebSocketResponse(
+                                    status = "success",
+                                    action = WebSocketActions.NEW_CHAT_MESSAGE,
+                                    response = messagePayload
+                                )
+                                webSocketManager.broadcastToChatGroup(userGroup.id, successResponse)
+                            } else {
+                                val errorResponse = WebSocketResponse(
+                                    status = "failure",
+                                    action = WebSocketActions.ERROR,
+                                    response = "发送消息失败"
+                                )
+                                webSocketManager.sendMessageToUser(userId, errorResponse)
                             }
                         }
 
@@ -173,7 +227,8 @@ fun Route.webSocketRoutes() {
             logger.error("WebSocket error for user $userId: ${e.localizedMessage}")
         } finally {
             logger.info("User id $userId is offline.")
-            WebSocketManager.removeConnection(userId)
+            webSocketManager.removeConnection(userId) // Use injected instance
         }
     }
+
 }
