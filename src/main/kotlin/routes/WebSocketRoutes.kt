@@ -172,6 +172,7 @@ fun Route.webSocketRoutes() {
         } catch (e: Exception) {
             logger.error("WebSocket error for user $userId: ${e.localizedMessage}")
         } finally {
+            logger.info("User id $userId is offline.")
             WebSocketManager.removeConnection(userId)
         }
     }
