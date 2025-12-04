@@ -16,6 +16,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import org.slf4j.LoggerFactory
 
+import com.eynnzerr.model.*
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.builtins.serializer
+
 class WebSocketManager(private val chatGroupRepository: ChatGroupRepository) {
     private val connections = ConcurrentHashMap<String, WebSocketSession>()
     private val pendingRequests = ConcurrentHashMap<String, Channel<WebSocketResponse<RoomAccessResponse>>>()
@@ -34,16 +38,34 @@ class WebSocketManager(private val chatGroupRepository: ChatGroupRepository) {
         return if (session != null) {
             withContext(Dispatchers.IO) {
                 try {
-                    session.send(Json.encodeToString(message))
+                    val jsonString = encodeWebSocketResponse(message)
+                    session.send(jsonString)
                     true
                 } catch (e: Exception) {
-                    // Log error sending message
+                    logger.error("Error sending message to user id {}: {}", userId, e.message)
                     false
                 }
             }
         } else {
             false // User not online
         }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun <T: Any> encodeWebSocketResponse(message: WebSocketResponse<T>): String {
+        val serializer = when (val payload = message.response) {
+            is NewChatMessagePayload -> NewChatMessagePayload.serializer() as KSerializer<T>
+            is UserJoinedChatPayload -> UserJoinedChatPayload.serializer() as KSerializer<T>
+            is UserLeftChatPayload -> UserLeftChatPayload.serializer() as KSerializer<T>
+            is NewOwnerPayload -> NewOwnerPayload.serializer() as KSerializer<T>
+            is ChatDisbandedPayload -> ChatDisbandedPayload.serializer() as KSerializer<T>
+            is RoomAccessRequest -> RoomAccessRequest.serializer() as KSerializer<T>
+            is RoomAccessResponse -> RoomAccessResponse.serializer() as KSerializer<T>
+            is String -> String.serializer() as KSerializer<T>
+            else -> throw IllegalArgumentException("Unknown payload type for WebSocketResponse: ${payload::class.simpleName}")
+        }
+        val responseSerializer = WebSocketResponse.serializer(serializer)
+        return Json.encodeToString(responseSerializer, message)
     }
 
     suspend fun broadcastToChatGroup(groupId: String, message: WebSocketResponse<out Any>) {

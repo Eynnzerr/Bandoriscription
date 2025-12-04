@@ -31,7 +31,7 @@ class ChatGroupRepository {
 
     suspend fun createChatGroup(ownerId: String): ChatGroup? = DatabaseFactory.dbQuery {
         // Check if user already owns a group
-        if (ChatGroups.select(ChatGroups.ownerId eq ownerId).singleOrNull() != null) {
+        if (ChatGroups.selectAll().where { ChatGroups.ownerId eq ownerId }.singleOrNull() != null) {
             return@dbQuery null
         }
 
@@ -40,6 +40,7 @@ class ChatGroupRepository {
             it[id] = newGroupId
             it[this.ownerId] = ownerId
             it[createdAt] = LocalDateTime.now()
+            it[lastActivityAt] = LocalDateTime.now()
         }
 
         val chatGroup = insertStatement.resultedValues?.singleOrNull()?.let(::resultRowToChatGroup)
@@ -56,39 +57,41 @@ class ChatGroupRepository {
     }
 
     suspend fun getChatGroup(groupId: String): ChatGroup? = DatabaseFactory.dbQuery {
-        ChatGroups.select(ChatGroups.id eq groupId)
+        ChatGroups.selectAll().where { ChatGroups.id eq groupId }
             .singleOrNull()
             ?.let(::resultRowToChatGroup)
     }
 
     suspend fun getChatGroupByOwnerId(ownerId: String): ChatGroup? = DatabaseFactory.dbQuery {
-        ChatGroups.select(ChatGroups.ownerId eq ownerId)
+        ChatGroups.selectAll()
+            .where(ChatGroups.ownerId eq ownerId)
             .singleOrNull()
             ?.let(::resultRowToChatGroup)
     }
     
     suspend fun getChatGroupForUser(userId: String): ChatGroup? = DatabaseFactory.dbQuery {
         (ChatGroups innerJoin ChatGroupMembers)
-            .select(ChatGroupMembers.userId eq userId)
+            .select(ChatGroups.columns)
+            .where { ChatGroupMembers.userId eq userId }
             .singleOrNull()
             ?.let(::resultRowToChatGroup)
     }
 
     suspend fun isUserInAnyGroup(userId: String): Boolean = DatabaseFactory.dbQuery {
-        ChatGroupMembers.select(ChatGroupMembers.userId eq userId).singleOrNull() != null
+        ChatGroupMembers.selectAll().where { ChatGroupMembers.userId eq userId }.singleOrNull() != null
     }
 
     suspend fun joinChatGroup(groupId: String, userId: String, maxMembers: Int): Boolean = DatabaseFactory.dbQuery {
         // Check if user is already in this or any other group
-        if (ChatGroupMembers.select(ChatGroupMembers.userId eq userId).singleOrNull() != null) {
+        if (ChatGroupMembers.selectAll().where { ChatGroupMembers.userId eq userId }.singleOrNull() != null) {
             return@dbQuery false // User is already in a group
         }
 
         // Check if group exists and is not full
-        val groupExists = ChatGroups.select(ChatGroups.id eq groupId).singleOrNull() != null
+        val groupExists = ChatGroups.selectAll().where { ChatGroups.id eq groupId }.singleOrNull() != null
         if (!groupExists) return@dbQuery false // Group does not exist
 
-        val currentMembers = ChatGroupMembers.select(ChatGroupMembers.groupId eq groupId).count()
+        val currentMembers = ChatGroupMembers.selectAll().where { ChatGroupMembers.groupId eq groupId }.count()
         if (currentMembers >= maxMembers) {
             return@dbQuery false // Group is full
         }
@@ -115,7 +118,7 @@ class ChatGroupRepository {
 
     suspend fun addChatMessage(groupId: String, userId: String, content: String, username: String, avatar: String): ChatMessage? = DatabaseFactory.dbQuery {
         // Ensure user is a member of the group
-        if (ChatGroupMembers.select((ChatGroupMembers.groupId eq groupId) and (ChatGroupMembers.userId eq userId)).singleOrNull() == null) {
+        if (ChatGroupMembers.selectAll().where { (ChatGroupMembers.groupId eq groupId) and (ChatGroupMembers.userId eq userId) }.singleOrNull() == null) {
             return@dbQuery null // User is not a member of this group
         }
 
@@ -127,11 +130,15 @@ class ChatGroupRepository {
             it[this.avatar] = avatar
             it[createdAt] = LocalDateTime.now()
         }
+        // Update last_activity_at for the chat group
+        ChatGroups.update({ ChatGroups.id eq groupId }) {
+            it[lastActivityAt] = LocalDateTime.now()
+        }
         insertStatement.resultedValues?.singleOrNull()?.let(::resultRowToChatMessage)
     }
 
     suspend fun getChatMessages(groupId: String, limit: Int, beforeMessageId: Long?): List<ChatMessage> = DatabaseFactory.dbQuery {
-        val query = ChatMessages.select(ChatMessages.groupId eq groupId)
+        val query = ChatMessages.selectAll().where { ChatMessages.groupId eq groupId }
             .orderBy(ChatMessages.createdAt to SortOrder.DESC, ChatMessages.id to SortOrder.DESC)
             .limit(limit)
 
@@ -143,11 +150,31 @@ class ChatGroupRepository {
     }
 
     suspend fun getChatGroupMembers(groupId: String): List<String> = DatabaseFactory.dbQuery {
-        ChatGroupMembers.select(ChatGroupMembers.groupId eq groupId)
+        ChatGroupMembers.selectAll().where { ChatGroupMembers.groupId eq groupId }
             .map { it[ChatGroupMembers.userId] }
     }
 
     suspend fun getChatGroupMemberCount(groupId: String): Long = DatabaseFactory.dbQuery {
-        ChatGroupMembers.select(ChatGroupMembers.groupId eq groupId).count()
+        ChatGroupMembers.selectAll()
+            .where { ChatGroupMembers.groupId eq groupId }
+            .count()
+    }
+
+    suspend fun getChatGroupMembersSortedByJoinDate(groupId: String): List<String> = DatabaseFactory.dbQuery {
+        ChatGroupMembers.selectAll().where { ChatGroupMembers.groupId eq groupId }
+            .orderBy(ChatGroupMembers.joinedAt, SortOrder.ASC)
+            .map { it[ChatGroupMembers.userId] }
+    }
+
+    suspend fun updateGroupOwner(groupId: String, newOwnerId: String): Boolean = DatabaseFactory.dbQuery {
+        ChatGroups.update({ ChatGroups.id eq groupId }) {
+            it[ownerId] = newOwnerId
+        } > 0
+    }
+
+    suspend fun findInactiveChatGroups(timeout: Duration): List<ChatGroup> = DatabaseFactory.dbQuery {
+        val cutoff = LocalDateTime.now().minus(timeout)
+        ChatGroups.selectAll().where { ChatGroups.lastActivityAt less cutoff }
+            .map(::resultRowToChatGroup)
     }
 }

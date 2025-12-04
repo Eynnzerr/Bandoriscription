@@ -75,7 +75,24 @@ object WebSocketActions {
     const val USER_LEFT_CHAT = "user_left_chat" // server -> app 用户接收其他用户离开通知
     const val USER_REMOVED_FROM_CHAT = "user_removed_from_chat" // server -> app 用户接收其他用户被移出通知
     const val CHAT_DISBANDED = "chat_disbanded" // server -> app 用户接收聊天室解散通知
+    const val NEW_OWNER_ASSIGNED = "new_owner_assigned" // server -> app 用户被指派为新房主
+    const val OWNER_CHANGED = "owner_changed" // server -> app 房主变更通知
+    const val CHAT_STATE_SYNC = "chat_state_sync" // server -> app 用户重连后同步当前聊天室状态
 }
+
+@Serializable
+data class ChatStateSyncPayload(
+    val groupId: String,
+    val ownerId: String,
+    val members: List<UserInfo>,
+    val recentMessages: List<ChatMessageInfo>
+)
+
+@Serializable
+data class NewOwnerPayload(
+    val groupId: String,
+    val newOwnerId: String
+)
 
 @Serializable
 data class SendChatMessageRequest(
@@ -93,7 +110,7 @@ data class NewChatMessagePayload(
 @Serializable
 data class ChatMessageInfo(
     val id: Long,
-    val sender: UserInfo,
+    val senderId: String,
     val content: String,
     val username: String,
     val avatar: String,

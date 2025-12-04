@@ -84,25 +84,26 @@ fun Route.chatRoutes() {
                 }
             }
 
-            get("/messages") {
+            post("/messages") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asString()
 
-                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
-                val beforeMessageId = call.request.queryParameters["before"]?.toLongOrNull()
+                val request = call.receive<MessageRequest>()
+                val limit = request.limit
+                val beforeMessageId = request.before
 
                 // Get the group the user is in
                 val userGroup = chatGroupRepository.getChatGroupForUser(userId)
                 if (userGroup == null) {
                     call.respondFailure("您当前不在任何群聊中")
-                    return@get
+                    return@post
                 }
 
                 val messages = chatGroupRepository.getChatMessages(userGroup.id, limit, beforeMessageId)
                 val messageResponses = messages.map { chatMessage ->
                     ChatMessageResponse(
                         id = chatMessage.id,
-                        sender = UserInfo(id = chatMessage.userId),
+                        senderId = chatMessage.userId,
                         content = chatMessage.content,
                         username = chatMessage.username,
                         avatar = chatMessage.avatar,
@@ -122,19 +123,60 @@ fun Route.chatRoutes() {
                     return@post
                 }
 
-                val success = chatGroupRepository.leaveChatGroup(userGroup.id, userId)
-                if (success) {
-                    // Broadcast to all group members that a user left
-                    val leaveNotification = WebSocketResponse(
-                        status = "success",
-                        action = WebSocketActions.USER_LEFT_CHAT,
-                        response = UserLeftChatPayload(groupId = userGroup.id, userId = userId)
-                    )
-                    webSocketManager.broadcastToChatGroup(userGroup.id, leaveNotification)
+                val isOwner = userGroup.ownerId == userId
+                if (isOwner) {
+                    // Owner is leaving
+                    val members = chatGroupRepository.getChatGroupMembersSortedByJoinDate(userGroup.id)
+                    if (members.size <= 1) {
+                        // Owner is the last person, disband the group
+                        chatGroupRepository.disbandChatGroup(userGroup.id)
+                        val disbandNotification = WebSocketResponse(
+                            status = "success",
+                            action = WebSocketActions.CHAT_DISBANDED,
+                            response = ChatDisbandedPayload(groupId = userGroup.id)
+                        )
+                        webSocketManager.broadcastToChatGroup(userGroup.id, disbandNotification)
+                        call.respondSuccess("您是最后一名成员，群聊已自动解散")
+                    } else {
+                        // More members exist, transfer ownership
+                        val newOwnerId = members.first { it != userId } // Find the first member who is not the current owner
+                        chatGroupRepository.updateGroupOwner(userGroup.id, newOwnerId)
+                        chatGroupRepository.leaveChatGroup(userGroup.id, userId)
 
-                    call.respondSuccess("已成功退出群聊")
+                        // Notify the new owner
+                        val newOwnerNotification = WebSocketResponse(
+                            status = "success",
+                            action = WebSocketActions.NEW_OWNER_ASSIGNED,
+                            response = NewOwnerPayload(groupId = userGroup.id, newOwnerId = newOwnerId)
+                        )
+                        webSocketManager.sendMessageToUser(newOwnerId, newOwnerNotification)
+
+                        // Notify all members (including new owner) about the change
+                        val ownerChangedNotification = WebSocketResponse(
+                            status = "success",
+                            action = WebSocketActions.OWNER_CHANGED,
+                            response = NewOwnerPayload(groupId = userGroup.id, newOwnerId = newOwnerId)
+                        )
+                        webSocketManager.broadcastToChatGroup(userGroup.id, ownerChangedNotification)
+
+                        call.respondSuccess("您已退出群聊，房主已转让")
+                    }
                 } else {
-                    call.respondFailure("退出群聊失败")
+                    // Normal member is leaving
+                    val success = chatGroupRepository.leaveChatGroup(userGroup.id, userId)
+                    if (success) {
+                        // Broadcast to all group members that a user left
+                        val leaveNotification = WebSocketResponse(
+                            status = "success",
+                            action = WebSocketActions.USER_LEFT_CHAT,
+                            response = UserLeftChatPayload(groupId = userGroup.id, userId = userId)
+                        )
+                        webSocketManager.broadcastToChatGroup(userGroup.id, leaveNotification)
+
+                        call.respondSuccess("已成功退出群聊")
+                    } else {
+                        call.respondFailure("退出群聊失败")
+                    }
                 }
             }
 

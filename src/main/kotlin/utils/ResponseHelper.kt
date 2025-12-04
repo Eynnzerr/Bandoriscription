@@ -8,13 +8,15 @@ import io.ktor.server.response.*
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
+import kotlin.reflect.typeOf
 
 @OptIn(InternalSerializationApi::class)
 suspend inline fun <reified T : Any> ApplicationCall.respondSuccess(data: T) {
     val content = when (data) {
         is String -> ApiResponseContent.StringContent(data)
         else -> {
-            val serializer = T::class.serializer()
+            // val serializer = T::class.serializer()
+            val serializer = serializer(typeOf<T>())
             ApiResponseContent.ObjectContent(Json.encodeToJsonElement(serializer, data))
         }
     }

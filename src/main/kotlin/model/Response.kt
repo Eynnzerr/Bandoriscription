@@ -24,12 +24,14 @@ sealed class ApiResponseContent {
 data class CreateChatResponse(val groupId: String)
 
 @Serializable
-data class UserInfo(val id: String)
+data class UserInfo(
+    val id: String
+)
 
 @Serializable
 data class ChatMessageResponse(
     val id: Long,
-    val sender: UserInfo,
+    val senderId: String,
     val content: String,
     val username: String,
     val avatar: String,

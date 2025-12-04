@@ -12,4 +12,7 @@ data class WhitelistRequest(val allowedUserId: String)
 data class JoinChatRequest(val ownerId: String)
 
 @Serializable
+data class MessageRequest(val limit: Int, val before: Long)
+
+@Serializable
 data class RemoveMemberRequest(val userId: String)

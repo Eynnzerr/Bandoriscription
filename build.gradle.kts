@@ -43,6 +43,7 @@ dependencies {
     implementation(libs.ktor.client.cio)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.logback.classic)
+    implementation(libs.kotlin.reflect)
     implementation(libs.ktor.server.config.yaml)
     implementation(libs.ktor.server.rate.limit)
     testImplementation(libs.ktor.server.test.host)

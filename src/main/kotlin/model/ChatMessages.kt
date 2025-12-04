@@ -5,9 +5,11 @@ import org.jetbrains.exposed.dao.id.LongIdTable
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.javatime.datetime
 
+import org.jetbrains.exposed.sql.ReferenceOption
+
 object ChatMessages : LongIdTable("chat_messages") {
-    val groupId = varchar("group_id", 36)
-    val userId = varchar("user_id", 128)
+    val groupId = varchar("group_id", 36).references(ChatGroups.id, onDelete = ReferenceOption.CASCADE)
+    val userId = varchar("user_id", 128) // Note: No CASCADE here, we might want to keep messages even if user is deleted, or handle it differently.
     val content = text("content")
     val username = varchar("username", 255)
     val avatar = text("avatar")

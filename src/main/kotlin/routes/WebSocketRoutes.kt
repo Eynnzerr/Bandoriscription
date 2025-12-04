@@ -51,6 +51,39 @@ fun Route.webSocketRoutes() {
         webSocketManager.addConnection(userId, this)
         logger.info("New websocket connection for user id {}", userId)
 
+        // Check if user is in a group and sync state if they are
+        val userGroup = chatGroupRepository.getChatGroupForUser(userId)
+        if (userGroup != null) {
+            val members = chatGroupRepository.getChatGroupMembers(userGroup.id)
+            val memberInfos = members.map { UserInfo(id = it) }
+
+            // Fetch recent messages
+            val recentMessages = chatGroupRepository.getChatMessages(userGroup.id, limit = 20, beforeMessageId = null)
+            val messageInfos = recentMessages.map {
+                ChatMessageInfo(
+                    id = it.id,
+                    senderId = it.userId,
+                    content = it.content,
+                    username = it.username,
+                    avatar = it.avatar,
+                    createdAt = it.createdAt
+                )
+            }
+
+            val syncPayload = ChatStateSyncPayload(
+                groupId = userGroup.id,
+                ownerId = userGroup.ownerId,
+                members = memberInfos,
+                recentMessages = messageInfos
+            )
+            val syncMessage = WebSocketResponse(
+                status = "success",
+                action = WebSocketActions.CHAT_STATE_SYNC,
+                response = syncPayload
+            )
+            webSocketManager.sendMessageToUser(userId, syncMessage)
+        }
+
         try {
             incoming.consumeEach { frame ->
                 if (frame is Frame.Text) {
@@ -188,7 +221,7 @@ fun Route.webSocketRoutes() {
                                     groupId = userGroup.id,
                                     message = ChatMessageInfo(
                                         id = chatMessage.id,
-                                        sender = UserInfo(id = chatMessage.userId),
+                                        senderId = chatMessage.userId,
                                         content = chatMessage.content,
                                         username = chatMessage.username,
                                         avatar = chatMessage.avatar,
