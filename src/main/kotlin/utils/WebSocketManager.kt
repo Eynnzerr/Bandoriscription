@@ -6,13 +6,24 @@ import com.eynnzerr.model.WebSocketActions
 import com.eynnzerr.model.WebSocketResponse
 import io.ktor.websocket.*
 import kotlinx.coroutines.channels.Channel
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.util.concurrent.ConcurrentHashMap
 
-object WebSocketManager {
+import com.eynnzerr.data.ChatGroupRepository
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
+import org.slf4j.LoggerFactory
+
+import com.eynnzerr.model.*
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.builtins.serializer
+
+class WebSocketManager(private val chatGroupRepository: ChatGroupRepository) {
     private val connections = ConcurrentHashMap<String, WebSocketSession>()
     private val pendingRequests = ConcurrentHashMap<String, Channel<WebSocketResponse<RoomAccessResponse>>>()
+    private val logger = LoggerFactory.getLogger("WebSocketManager")
 
     fun addConnection(userId: String, session: WebSocketSession) {
         connections[userId] = session
@@ -20,6 +31,74 @@ object WebSocketManager {
 
     fun removeConnection(userId: String) {
         connections.remove(userId)
+    }
+
+    suspend fun sendMessageToAll(message: WebSocketResponse<out Any>) {
+        val jsonString = encodeWebSocketResponse(message)
+        connections.entries.forEach { (userId, session) ->
+            withContext(Dispatchers.IO) {
+                try {
+                    session.send(jsonString)
+                } catch (e: Exception) {
+                    logger.error("Broadcast: Error sending message to user id {}: {}", userId, e.message)
+                }
+            }
+        }
+    }
+
+    suspend fun sendMessageToUser(userId: String, message: WebSocketResponse<out Any>): Boolean {
+        val session = connections[userId]
+        return if (session != null) {
+            withContext(Dispatchers.IO) {
+                try {
+                    val jsonString = encodeWebSocketResponse(message)
+                    session.send(jsonString)
+                    true
+                } catch (e: Exception) {
+                    logger.error("Singlecast: Error sending message to user id {}: {}", userId, e.message)
+                    false
+                }
+            }
+        } else {
+            false // User not online
+        }
+    }
+
+    // TODO 太丑了，以后重构
+    @Suppress("UNCHECKED_CAST")
+    private fun <T: Any> encodeWebSocketResponse(message: WebSocketResponse<T>): String {
+        val serializer = when (val payload = message.response) {
+            is NewChatMessagePayload -> NewChatMessagePayload.serializer() as KSerializer<T>
+            is UserChatPayload -> UserChatPayload.serializer() as KSerializer<T>
+            is NewOwnerPayload -> NewOwnerPayload.serializer() as KSerializer<T>
+            is ChatDisbandedPayload -> ChatDisbandedPayload.serializer() as KSerializer<T>
+            is RoomAccessRequest -> RoomAccessRequest.serializer() as KSerializer<T>
+            is RoomAccessResponse -> RoomAccessResponse.serializer() as KSerializer<T>
+            is ChatGroupChange -> ChatGroupChange.serializer() as KSerializer<T>
+            is ChatMessage -> ChatMessage.serializer() as KSerializer<T>
+            is ChatMessageResponse -> ChatMessageResponse.serializer() as KSerializer<T>
+            is ChatStateSyncPayload -> ChatStateSyncPayload.serializer() as KSerializer<T>
+            is String -> String.serializer() as KSerializer<T>
+            else -> throw IllegalArgumentException("Unknown payload type for WebSocketResponse: ${payload::class.simpleName}")
+        }
+        val responseSerializer = WebSocketResponse.serializer(serializer)
+        return Json.encodeToString(responseSerializer, message)
+    }
+
+    suspend fun broadcastToChatGroup(groupId: String, message: WebSocketResponse<out Any>) {
+        val members = chatGroupRepository.getChatGroupMembers(groupId)
+
+        supervisorScope {
+            members.forEach { userId ->
+                launch(Dispatchers.IO) {
+                    try {
+                        sendMessageToUser(userId, message)
+                    } catch (e: Exception) {
+                        logger.error("Failed to send to $userId", e)
+                    }
+                }
+            }
+        }
     }
 
     suspend fun sendAccessRequest(targetUserId: String, request: RoomAccessRequest): Channel<WebSocketResponse<RoomAccessResponse>> {
@@ -33,7 +112,7 @@ object WebSocketManager {
                 action = WebSocketActions.ACCESS_REQUEST_RECEIVED,
                 response = request
             )
-            targetSession.send(Json.encodeToString(requestMessage))
+            sendMessageToUser(targetUserId, requestMessage)
         } else {
             responseChannel.send(
                 WebSocketResponse(

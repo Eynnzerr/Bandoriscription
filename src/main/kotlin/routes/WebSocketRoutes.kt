@@ -2,11 +2,13 @@ package com.eynnzerr.routes
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.eynnzerr.data.ChatGroupRepository
 import com.eynnzerr.data.RoomRepository
 import com.eynnzerr.data.UserRepository
 import com.eynnzerr.model.*
 import com.eynnzerr.utils.JwtConfig
 import com.eynnzerr.utils.WebSocketManager
+import com.github.houbb.sensitive.word.core.SensitiveWordHelper
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
@@ -23,6 +25,8 @@ fun Route.webSocketRoutes() {
     val logger = LoggerFactory.getLogger("API_CALL")
     val userRepository by inject<UserRepository>()
     val roomRepository by inject<RoomRepository>()
+    val chatGroupRepository by inject<ChatGroupRepository>()
+    val webSocketManager by inject<WebSocketManager>()
     val requestTimestamps = ConcurrentHashMap<String, Long>()
     val cooldownMillis = 5000L // 5 seconds
 
@@ -45,8 +49,54 @@ fun Route.webSocketRoutes() {
             return@webSocket
         }
 
-        WebSocketManager.addConnection(userId, this)
+        webSocketManager.addConnection(userId, this)
         logger.info("New websocket connection for user id {}", userId)
+
+        // Check if user is in a group and sync state if they are
+        val userGroup = chatGroupRepository.getChatGroupForUser(userId)
+        if (userGroup != null) {
+            val members = chatGroupRepository.getChatGroupMembers(userGroup.id)
+            val memberInfos = members.map { UserInfo(id = it) }
+
+            // Fetch recent messages
+            val recentMessages = chatGroupRepository.getChatMessages(userGroup.id, limit = 20, beforeMessageId = null)
+            val messageInfos = recentMessages.map {
+                ChatMessageInfo(
+                    id = it.id,
+                    senderId = it.userId,
+                    content = it.content,
+                    username = it.username,
+                    avatar = it.avatar,
+                    createdAt = it.createdAt
+                )
+            }
+
+            val syncPayload = ChatStateSyncPayload(
+                groupId = userGroup.id,
+                ownerId = userGroup.ownerId,
+                members = memberInfos,
+                recentMessages = messageInfos,
+                name= userGroup.name,
+            )
+            val syncMessage = WebSocketResponse(
+                status = "success",
+                action = WebSocketActions.CHAT_STATE_SYNC,
+                response = syncPayload
+            )
+            webSocketManager.sendMessageToUser(userId, syncMessage)
+        }
+
+        // 用户一经连接，即向其推送当前全部聊天群组数据
+        val groups = chatGroupRepository.getAllChatGroupsWithDetails()
+        val syncMessage = WebSocketResponse(
+            status = "success",
+            action = WebSocketActions.CHAT_GROUP_CHANGE,
+            response = ChatGroupChange(
+                chatGroups = groups,
+                changeStatus = GroupChangeStatus.UPSERTED,
+            )
+        )
+        webSocketManager.sendMessageToUser(userId, syncMessage)
 
         try {
             incoming.consumeEach { frame ->
@@ -107,7 +157,7 @@ fun Route.webSocketRoutes() {
                             }
 
                             // 发送请求给目标用户
-                            val responseChannel = WebSocketManager.sendAccessRequest(requestData.targetUserId, requestData)
+                            val responseChannel = webSocketManager.sendAccessRequest(requestData.targetUserId, requestData)
 
                             // 等待响应，超时时间30秒
                             val response = withTimeoutOrNull(30000) {
@@ -144,7 +194,7 @@ fun Route.webSocketRoutes() {
                                         message = "房主同意了你的请求"
                                     )
                                 )
-                                WebSocketManager.handleAccessResponse(responseData.requestId, approvedResponse)
+                                webSocketManager.handleAccessResponse(responseData.requestId, approvedResponse)
                             } else {
                                 val deniedResponse = WebSocketResponse(
                                     status = "success",
@@ -154,7 +204,64 @@ fun Route.webSocketRoutes() {
                                         message = "房主拒绝了您的请求"
                                     )
                                 )
-                                WebSocketManager.handleAccessResponse(responseData.requestId, deniedResponse)
+                                webSocketManager.handleAccessResponse(responseData.requestId, deniedResponse)
+                            }
+                        }
+
+                        WebSocketActions.SEND_CHAT_MESSAGE -> {
+                            val requestData = Json.decodeFromJsonElement(SendChatMessageRequest.serializer(), request.data!!)
+
+                            // Get the group the user is in
+                            val userGroup = chatGroupRepository.getChatGroupForUser(userId)
+                            if (userGroup == null) {
+                                val errorResponse = WebSocketResponse(
+                                    status = "failure",
+                                    action = WebSocketActions.ERROR,
+                                    response = "您当前不在任何群聊中，无法发送消息"
+                                )
+                                send(Json.encodeToString(errorResponse))
+                                return@consumeEach
+                            }
+
+                            // 敏感词检查
+                            if (SensitiveWordHelper.contains(requestData.content)) {
+                                val errorResponse = WebSocketResponse(
+                                    status = "failure",
+                                    action = WebSocketActions.ERROR,
+                                    response = "文字包括敏感词，请重新输入！",
+                                )
+                                send(Json.encodeToString(errorResponse))
+                                return@consumeEach
+                            }
+
+                            val chatMessage = chatGroupRepository.addChatMessage(
+                                groupId = userGroup.id,
+                                userId = userId,
+                                content = requestData.content,
+                                username = requestData.username,
+                                avatar = requestData.avatar
+                            )
+                            if (chatMessage != null) {
+                                val successResponse = WebSocketResponse(
+                                    status = "success",
+                                    action = WebSocketActions.NEW_CHAT_MESSAGE,
+                                    response = ChatMessageResponse(
+                                        id = chatMessage.id,
+                                        senderId = userId,
+                                        content = chatMessage.content,
+                                        username = chatMessage.username,
+                                        avatar = chatMessage.avatar,
+                                        createdAt = chatMessage.createdAt,
+                                    ),
+                                )
+                                webSocketManager.broadcastToChatGroup(userGroup.id, successResponse)
+                            } else {
+                                val errorResponse = WebSocketResponse(
+                                    status = "failure",
+                                    action = WebSocketActions.ERROR,
+                                    response = "发送消息失败"
+                                )
+                                send(Json.encodeToString(errorResponse))
                             }
                         }
 
@@ -172,7 +279,9 @@ fun Route.webSocketRoutes() {
         } catch (e: Exception) {
             logger.error("WebSocket error for user $userId: ${e.localizedMessage}")
         } finally {
-            WebSocketManager.removeConnection(userId)
+            logger.info("User id $userId is offline.")
+            webSocketManager.removeConnection(userId) // Use injected instance
         }
     }
+
 }

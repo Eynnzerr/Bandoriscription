@@ -17,8 +17,9 @@ bandoristation:
     externalApiUrl: "https://server.bandoristation.com"
 
 cleanup:
-  retention_days: 1
+  room_retention_days: 1
   interval_hours: 24
+  chat_inactivity_timeout_hours: 2
 
 jwt:
     # Environment variable override: JWT_SECRET

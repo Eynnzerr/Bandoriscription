@@ -1,7 +1,9 @@
 package com.eynnzerr.di
 
+import com.eynnzerr.data.ChatGroupRepository
 import com.eynnzerr.data.RoomRepository
 import com.eynnzerr.data.UserRepository
+import com.eynnzerr.utils.WebSocketManager
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -25,4 +27,6 @@ val appModule = module {
 
     singleOf(::UserRepository)
     singleOf(::RoomRepository)
+    singleOf(::ChatGroupRepository)
+    singleOf(::WebSocketManager)
 }
