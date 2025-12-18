@@ -37,3 +37,36 @@ data class ChatMessageResponse(
     val avatar: String,
     val createdAt: String
 )
+
+@Serializable
+data class OwnerInfo(
+    val id: String,
+    val name: String,
+    val avatar: String
+)
+
+@Serializable
+data class ChatGroupDetails(
+    val id: String,
+    val name: String,
+    val owner: OwnerInfo,
+    val memberCount: Long,
+    val createdAt: String,
+    val lastActivityAt: String
+)
+
+@Serializable
+data class AllChatGroups(
+    val chatGroups: List<ChatGroupDetails>,
+)
+
+@Serializable
+data class ChatGroupChange(
+    val chatGroups: List<ChatGroupDetails>,
+    val changeStatus: GroupChangeStatus,
+)
+
+enum class GroupChangeStatus {
+    UPSERTED,
+    REMOVED
+}

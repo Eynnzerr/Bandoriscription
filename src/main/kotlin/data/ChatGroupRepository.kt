@@ -1,22 +1,22 @@
 package com.eynnzerr.data
 
-import com.eynnzerr.model.ChatGroup
-import com.eynnzerr.model.ChatGroupMembers
-import com.eynnzerr.model.ChatGroups
-import com.eynnzerr.model.ChatMessage
-import com.eynnzerr.model.ChatMessages
+import com.eynnzerr.model.*
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.statements.api.ExposedBlob
+import java.time.Duration
 import java.time.LocalDateTime
 import java.util.UUID
+import org.jetbrains.exposed.sql.alias
+import org.jetbrains.exposed.sql.count
 
 class ChatGroupRepository {
 
     private fun resultRowToChatGroup(row: ResultRow) = ChatGroup(
         id = row[ChatGroups.id],
         ownerId = row[ChatGroups.ownerId],
-        createdAt = row[ChatGroups.createdAt].toString()
+        createdAt = row[ChatGroups.createdAt].toString(),
+        lastActivityAt = row[ChatGroups.lastActivityAt].toString(),
+        name = row[ChatGroups.name],
     )
 
     private fun resultRowToChatMessage(row: ResultRow) = ChatMessage(
@@ -29,7 +29,13 @@ class ChatGroupRepository {
         createdAt = row[ChatMessages.createdAt].toString()
     )
 
-    suspend fun createChatGroup(ownerId: String): ChatGroup? = DatabaseFactory.dbQuery {
+    private fun resultRowToSimpleUserInfo(row: ResultRow) = OwnerInfo(
+        id = row[ChatGroupMembers.userId],
+        name = row[ChatGroupMembers.username],
+        avatar = row[ChatGroupMembers.avatar],
+    )
+
+    suspend fun createChatGroup(ownerId: String, info: CreateChatRequest): ChatGroup? = DatabaseFactory.dbQuery {
         // Check if user already owns a group
         if (ChatGroups.selectAll().where { ChatGroups.ownerId eq ownerId }.singleOrNull() != null) {
             return@dbQuery null
@@ -41,6 +47,7 @@ class ChatGroupRepository {
             it[this.ownerId] = ownerId
             it[createdAt] = LocalDateTime.now()
             it[lastActivityAt] = LocalDateTime.now()
+            it[name] = info.roomName
         }
 
         val chatGroup = insertStatement.resultedValues?.singleOrNull()?.let(::resultRowToChatGroup)
@@ -51,6 +58,8 @@ class ChatGroupRepository {
                 it[groupId] = chatGroup.id
                 it[userId] = ownerId
                 it[joinedAt] = LocalDateTime.now()
+                it[username] = info.ownerName
+                it[avatar] = info.ownerAvatar
             }
         }
         chatGroup
@@ -60,6 +69,53 @@ class ChatGroupRepository {
         ChatGroups.selectAll().where { ChatGroups.id eq groupId }
             .singleOrNull()
             ?.let(::resultRowToChatGroup)
+    }
+
+    suspend fun getAllChatGroupsWithDetails(): List<ChatGroupDetails> = DatabaseFactory.dbQuery {
+        val ownerDetails = ChatGroupMembers.alias("owner_details")
+        val memberCount = ChatGroupMembers.userId.count().alias("member_count")
+
+        ChatGroups
+            .join(
+                ownerDetails,
+                JoinType.INNER,
+                additionalConstraint = { (ChatGroups.id eq ownerDetails[ChatGroupMembers.groupId]) and (ChatGroups.ownerId eq ownerDetails[ChatGroupMembers.userId]) }
+            )
+            .join(
+                ChatGroupMembers,
+                JoinType.LEFT,
+                onColumn = ChatGroups.id,
+                otherColumn = ChatGroupMembers.groupId
+            )
+            .select(
+                ChatGroups.id,
+                ChatGroups.name,
+                ChatGroups.createdAt,
+                ChatGroups.lastActivityAt,
+                ChatGroups.ownerId,
+                ownerDetails[ChatGroupMembers.username],
+                ownerDetails[ChatGroupMembers.avatar],
+                memberCount
+            )
+            .groupBy(
+                ChatGroups.id,
+                ownerDetails[ChatGroupMembers.username],
+                ownerDetails[ChatGroupMembers.avatar]
+            )
+            .map { row ->
+                ChatGroupDetails(
+                    id = row[ChatGroups.id],
+                    name = row[ChatGroups.name],
+                    owner = OwnerInfo(
+                        id = row[ChatGroups.ownerId],
+                        name = row[ownerDetails[ChatGroupMembers.username]],
+                        avatar = row[ownerDetails[ChatGroupMembers.avatar]]
+                    ),
+                    memberCount = row[memberCount],
+                    createdAt = row[ChatGroups.createdAt].toString(),
+                    lastActivityAt = row[ChatGroups.lastActivityAt].toString()
+                )
+            }
     }
 
     suspend fun getChatGroupByOwnerId(ownerId: String): ChatGroup? = DatabaseFactory.dbQuery {
@@ -81,7 +137,7 @@ class ChatGroupRepository {
         ChatGroupMembers.selectAll().where { ChatGroupMembers.userId eq userId }.singleOrNull() != null
     }
 
-    suspend fun joinChatGroup(groupId: String, userId: String, maxMembers: Int): Boolean = DatabaseFactory.dbQuery {
+    suspend fun joinChatGroup(groupId: String, userId: String, maxMembers: Int, info: JoinChatRequest): Boolean = DatabaseFactory.dbQuery {
         // Check if user is already in this or any other group
         if (ChatGroupMembers.selectAll().where { ChatGroupMembers.userId eq userId }.singleOrNull() != null) {
             return@dbQuery false // User is already in a group
@@ -100,6 +156,8 @@ class ChatGroupRepository {
             it[this.groupId] = groupId
             it[this.userId] = userId
             it[joinedAt] = LocalDateTime.now()
+            it[username] = info.username
+            it[avatar] = info.avatar
         }.insertedCount > 0
     }
 
@@ -176,5 +234,16 @@ class ChatGroupRepository {
         val cutoff = LocalDateTime.now().minus(timeout)
         ChatGroups.selectAll().where { ChatGroups.lastActivityAt less cutoff }
             .map(::resultRowToChatGroup)
+    }
+
+    suspend fun getUserSimpleInfo(userId: String): OwnerInfo? = DatabaseFactory.dbQuery {
+        ChatGroupMembers
+            .select(
+                ChatGroupMembers.userId,
+                ChatGroupMembers.username,
+                ChatGroupMembers.avatar
+            )
+            .where { ChatGroupMembers.userId eq userId }
+            .singleOrNull()?.let(::resultRowToSimpleUserInfo)
     }
 }

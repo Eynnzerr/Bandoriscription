@@ -8,6 +8,7 @@ import com.eynnzerr.data.UserRepository
 import com.eynnzerr.model.*
 import com.eynnzerr.utils.JwtConfig
 import com.eynnzerr.utils.WebSocketManager
+import com.github.houbb.sensitive.word.core.SensitiveWordHelper
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
@@ -74,7 +75,8 @@ fun Route.webSocketRoutes() {
                 groupId = userGroup.id,
                 ownerId = userGroup.ownerId,
                 members = memberInfos,
-                recentMessages = messageInfos
+                recentMessages = messageInfos,
+                name= userGroup.name,
             )
             val syncMessage = WebSocketResponse(
                 status = "success",
@@ -83,6 +85,18 @@ fun Route.webSocketRoutes() {
             )
             webSocketManager.sendMessageToUser(userId, syncMessage)
         }
+
+        // 用户一经连接，即向其推送当前全部聊天群组数据
+        val groups = chatGroupRepository.getAllChatGroupsWithDetails()
+        val syncMessage = WebSocketResponse(
+            status = "success",
+            action = WebSocketActions.CHAT_GROUP_CHANGE,
+            response = ChatGroupChange(
+                chatGroups = groups,
+                changeStatus = GroupChangeStatus.UPSERTED,
+            )
+        )
+        webSocketManager.sendMessageToUser(userId, syncMessage)
 
         try {
             incoming.consumeEach { frame ->
@@ -205,7 +219,18 @@ fun Route.webSocketRoutes() {
                                     action = WebSocketActions.ERROR,
                                     response = "您当前不在任何群聊中，无法发送消息"
                                 )
-                                webSocketManager.sendMessageToUser(userId, errorResponse)
+                                send(Json.encodeToString(errorResponse))
+                                return@consumeEach
+                            }
+
+                            // 敏感词检查
+                            if (SensitiveWordHelper.contains(requestData.content)) {
+                                val errorResponse = WebSocketResponse(
+                                    status = "failure",
+                                    action = WebSocketActions.ERROR,
+                                    response = "文字包括敏感词，请重新输入！",
+                                )
+                                send(Json.encodeToString(errorResponse))
                                 return@consumeEach
                             }
 
@@ -217,22 +242,17 @@ fun Route.webSocketRoutes() {
                                 avatar = requestData.avatar
                             )
                             if (chatMessage != null) {
-                                val messagePayload = NewChatMessagePayload(
-                                    groupId = userGroup.id,
-                                    message = ChatMessageInfo(
-                                        id = chatMessage.id,
-                                        senderId = chatMessage.userId,
-                                        content = chatMessage.content,
-                                        username = chatMessage.username,
-                                        avatar = chatMessage.avatar,
-                                        createdAt = chatMessage.createdAt
-                                    )
-
-                                )
                                 val successResponse = WebSocketResponse(
                                     status = "success",
                                     action = WebSocketActions.NEW_CHAT_MESSAGE,
-                                    response = messagePayload
+                                    response = ChatMessageResponse(
+                                        id = chatMessage.id,
+                                        senderId = userId,
+                                        content = chatMessage.content,
+                                        username = chatMessage.username,
+                                        avatar = chatMessage.avatar,
+                                        createdAt = chatMessage.createdAt,
+                                    ),
                                 )
                                 webSocketManager.broadcastToChatGroup(userGroup.id, successResponse)
                             } else {
@@ -241,7 +261,7 @@ fun Route.webSocketRoutes() {
                                     action = WebSocketActions.ERROR,
                                     response = "发送消息失败"
                                 )
-                                webSocketManager.sendMessageToUser(userId, errorResponse)
+                                send(Json.encodeToString(errorResponse))
                             }
                         }
 

@@ -1,7 +1,6 @@
 package com.eynnzerr.routes
 
 import com.eynnzerr.data.ChatGroupRepository
-import com.eynnzerr.data.UserRepository
 import com.eynnzerr.model.*
 import com.eynnzerr.utils.respondFailure
 import com.eynnzerr.utils.respondSuccess
@@ -10,9 +9,7 @@ import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.*
 import io.ktor.server.routing.*
 import org.koin.ktor.ext.inject
-import java.util.UUID
-
-import com.eynnzerr.utils.WebSocketManager // Import WebSocketManager
+import com.eynnzerr.utils.WebSocketManager
 
 // Max members for a chat group as per requirement
 private const val MAX_GROUP_MEMBERS = 8
@@ -33,11 +30,52 @@ fun Route.chatRoutes() {
                     return@post
                 }
 
-                val chatGroup = chatGroupRepository.createChatGroup(userId)
+                val request = call.receive<CreateChatRequest>()
+                val chatGroup = chatGroupRepository.createChatGroup(userId, request)
                 if (chatGroup != null) {
+                    // 广播新群聊信息
+                    val syncMessage = WebSocketResponse(
+                        status = "success",
+                        action = WebSocketActions.CHAT_GROUP_CHANGE,
+                        response = ChatGroupChange(
+                            chatGroups = listOf(
+                                ChatGroupDetails(
+                                    id = chatGroup.id,
+                                    name = chatGroup.name,
+                                    owner = OwnerInfo(
+                                        id = userId,
+                                        name = request.ownerName,
+                                        avatar = request.ownerAvatar,
+                                    ),
+                                    memberCount = 1,
+                                    createdAt = chatGroup.createdAt,
+                                    lastActivityAt = chatGroup.lastActivityAt,
+                                )
+                            ),
+                            changeStatus = GroupChangeStatus.UPSERTED,
+                        )
+                    )
+                    webSocketManager.sendMessageToAll(syncMessage)
+
                     call.respondSuccess(CreateChatResponse(groupId = chatGroup.id))
                 } else {
                     call.respondFailure("创建群聊失败")
+                }
+            }
+
+            post("/all_groups") {
+                val groups = chatGroupRepository.getAllChatGroupsWithDetails()
+                call.respondSuccess(AllChatGroups(groups))
+            }
+
+            post("/group_of_user") {
+                val request = call.receive<UserInfo>()
+
+                val group = chatGroupRepository.getChatGroupForUser(request.id)
+                if (group == null) {
+                    call.respondFailure("目标用户未加入群聊")
+                } else {
+                    call.respondSuccess(UserInfo(id = group.ownerId))
                 }
             }
 
@@ -62,17 +100,48 @@ fun Route.chatRoutes() {
                 }
 
                 // Try to join
-                val success = chatGroupRepository.joinChatGroup(targetGroup.id, userId, MAX_GROUP_MEMBERS)
+                val success = chatGroupRepository.joinChatGroup(targetGroup.id, userId, MAX_GROUP_MEMBERS, request)
                 if (success) {
+                    // respond along with history messages.
+                    val members = chatGroupRepository.getChatGroupMembers(targetGroup.id)
+                    val memberInfos = members.map { UserInfo(id = it) }
+                    val recentMessages = chatGroupRepository.getChatMessages(targetGroup.id, limit = 20, beforeMessageId = null)
+                    val messageInfos = recentMessages.map {
+                        ChatMessageInfo(
+                            id = it.id,
+                            senderId = it.userId,
+                            content = it.content,
+                            username = it.username,
+                            avatar = it.avatar,
+                            createdAt = it.createdAt
+                        )
+                    }
+                    val syncPayload = ChatStateSyncPayload(
+                        groupId = targetGroup.id,
+                        ownerId = targetGroup.ownerId,
+                        members = memberInfos,
+                        recentMessages = messageInfos,
+                        name = targetGroup.name,
+                    )
+
+                    call.respondSuccess(syncPayload)
+
                     // Broadcast to all group members that a new user joined
                     val joinNotification = WebSocketResponse(
                         status = "success",
                         action = WebSocketActions.USER_JOINED_CHAT,
-                        response = UserJoinedChatPayload(groupId = targetGroup.id, user = UserInfo(id = userId))
+                        response = UserChatPayload(
+                            groupId = targetGroup.id,
+                            user = OwnerInfo(
+                                id = userId,
+                                name = request.username,
+                                avatar = request.avatar,
+                            )
+                        )
                     )
                     webSocketManager.broadcastToChatGroup(targetGroup.id, joinNotification)
 
-                    call.respondSuccess("成功加入群聊")
+                    // TODO 广播群人数变化
                 } else {
                     // This could be due to group being full, or other issues not caught by previous checks
                     val memberCount = chatGroupRepository.getChatGroupMemberCount(targetGroup.id)
@@ -119,10 +188,11 @@ fun Route.chatRoutes() {
 
                 val userGroup = chatGroupRepository.getChatGroupForUser(userId)
                 if (userGroup == null) {
-                    call.respondFailure("您当前不在任何群聊中")
+                    call.respondSuccess("您当前已不在任何群聊中。")
                     return@post
                 }
 
+                val userInfo = chatGroupRepository.getUserSimpleInfo(userId)
                 val isOwner = userGroup.ownerId == userId
                 if (isOwner) {
                     // Owner is leaving
@@ -137,6 +207,31 @@ fun Route.chatRoutes() {
                         )
                         webSocketManager.broadcastToChatGroup(userGroup.id, disbandNotification)
                         call.respondSuccess("您是最后一名成员，群聊已自动解散")
+
+                        // 广播群聊删除
+                        val syncMessage = WebSocketResponse(
+                            status = "success",
+                            action = WebSocketActions.CHAT_GROUP_CHANGE,
+                            response = ChatGroupChange(
+                                chatGroups = listOf(
+                                    ChatGroupDetails(
+                                        id = userGroup.id, // 唯一会被客户端消费的字段
+                                        name = userGroup.name,
+                                        owner = OwnerInfo(
+                                            id = "",
+                                            name = "",
+                                            avatar = "",
+                                        ),
+                                        memberCount = 0,
+                                        createdAt = userGroup.createdAt,
+                                        lastActivityAt = userGroup.lastActivityAt,
+                                    )
+                                ),
+                                changeStatus = GroupChangeStatus.REMOVED,
+                            )
+                        )
+                        webSocketManager.sendMessageToAll(syncMessage)
+
                     } else {
                         // More members exist, transfer ownership
                         val newOwnerId = members.first { it != userId } // Find the first member who is not the current owner
@@ -160,6 +255,8 @@ fun Route.chatRoutes() {
                         webSocketManager.broadcastToChatGroup(userGroup.id, ownerChangedNotification)
 
                         call.respondSuccess("您已退出群聊，房主已转让")
+
+                        // TODO 广播群聊人数减少
                     }
                 } else {
                     // Normal member is leaving
@@ -169,11 +266,20 @@ fun Route.chatRoutes() {
                         val leaveNotification = WebSocketResponse(
                             status = "success",
                             action = WebSocketActions.USER_LEFT_CHAT,
-                            response = UserLeftChatPayload(groupId = userGroup.id, userId = userId)
+                            response = UserChatPayload(
+                                groupId = userGroup.id,
+                                user = OwnerInfo(
+                                    id = userId,
+                                    name = userInfo?.name ?: "",
+                                    avatar = userInfo?.avatar ?: "",
+                                )
+                            )
                         )
                         webSocketManager.broadcastToChatGroup(userGroup.id, leaveNotification)
 
                         call.respondSuccess("已成功退出群聊")
+
+                        // TODO 广播群聊人数减少
                     } else {
                         call.respondFailure("退出群聊失败")
                     }
@@ -196,23 +302,48 @@ fun Route.chatRoutes() {
                     // Broadcast to all group members that the group was disbanded
                     val disbandNotification = WebSocketResponse(
                         status = "success",
-                        action = WebSocketActions.CHAT_DISBANDED,
+action = WebSocketActions.CHAT_DISBANDED,
                         response = ChatDisbandedPayload(groupId = ownedGroup.id)
                     )
                     webSocketManager.broadcastToChatGroup(ownedGroup.id, disbandNotification)
 
                     call.respondSuccess("群聊已解散")
+
+                    // 广播群聊删除
+                    val syncMessage = WebSocketResponse(
+                        status = "success",
+                        action = WebSocketActions.CHAT_GROUP_CHANGE,
+                        response = ChatGroupChange(
+                            chatGroups = listOf(
+                                ChatGroupDetails(
+                                    id = ownedGroup.id, // 唯一会被客户端消费的字段
+                                    name = ownedGroup.name,
+                                    owner = OwnerInfo(
+                                        id = "",
+                                        name = "",
+                                        avatar = "",
+                                    ),
+                                    memberCount = 0,
+                                    createdAt = ownedGroup.createdAt,
+                                    lastActivityAt = ownedGroup.lastActivityAt,
+                                )
+                            ),
+                            changeStatus = GroupChangeStatus.REMOVED,
+                        )
+                    )
+                    webSocketManager.sendMessageToAll(syncMessage)
                 } else {
                     call.respondFailure("解散群聊失败")
                 }
             }
 
-            post("/remove-member") {
+            post("/remove_member") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asString()
 
                 val request = call.receive<RemoveMemberRequest>()
                 val memberToRemoveId = request.userId
+                val userInfo = chatGroupRepository.getUserSimpleInfo(memberToRemoveId)
 
                 // Ensure current user is the owner
                 val ownedGroup = chatGroupRepository.getChatGroupByOwnerId(userId)
@@ -235,9 +366,9 @@ fun Route.chatRoutes() {
                 if (success) {
                     // Notify removed user
                     val removedNotificationToUser = WebSocketResponse(
-                        status = "failure", // Or a specific success type if needed for client handling
+                        status = "failure",
                         action = WebSocketActions.ERROR, // Using ERROR for simplicity as it's a negative event for the user
-                        response = "您已被移出群聊 ${ownedGroup.id}"
+                        response = "您已被移出群聊 ${ownedGroup.name}"
                     )
                     webSocketManager.sendMessageToUser(memberToRemoveId, removedNotificationToUser)
 
@@ -245,9 +376,18 @@ fun Route.chatRoutes() {
                     val removedNotificationToGroup = WebSocketResponse(
                         status = "success",
                         action = WebSocketActions.USER_REMOVED_FROM_CHAT,
-                        response = UserLeftChatPayload(groupId = ownedGroup.id, userId = memberToRemoveId)
+                        response = UserChatPayload(
+                            groupId = ownedGroup.id,
+                            user = OwnerInfo(
+                                id = userInfo?.id ?: "",
+                                name = userInfo?.name ?: "",
+                                avatar = userInfo?.avatar ?: "",
+                            )
+                        )
                     )
                     webSocketManager.broadcastToChatGroup(ownedGroup.id, removedNotificationToGroup)
+
+                    // TODO 广播群聊人数减少
 
                     call.respondSuccess("已移除该成员")
                 } else {

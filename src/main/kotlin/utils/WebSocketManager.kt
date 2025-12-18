@@ -33,6 +33,19 @@ class WebSocketManager(private val chatGroupRepository: ChatGroupRepository) {
         connections.remove(userId)
     }
 
+    suspend fun sendMessageToAll(message: WebSocketResponse<out Any>) {
+        val jsonString = encodeWebSocketResponse(message)
+        connections.entries.forEach { (userId, session) ->
+            withContext(Dispatchers.IO) {
+                try {
+                    session.send(jsonString)
+                } catch (e: Exception) {
+                    logger.error("Broadcast: Error sending message to user id {}: {}", userId, e.message)
+                }
+            }
+        }
+    }
+
     suspend fun sendMessageToUser(userId: String, message: WebSocketResponse<out Any>): Boolean {
         val session = connections[userId]
         return if (session != null) {
@@ -42,7 +55,7 @@ class WebSocketManager(private val chatGroupRepository: ChatGroupRepository) {
                     session.send(jsonString)
                     true
                 } catch (e: Exception) {
-                    logger.error("Error sending message to user id {}: {}", userId, e.message)
+                    logger.error("Singlecast: Error sending message to user id {}: {}", userId, e.message)
                     false
                 }
             }
@@ -51,16 +64,20 @@ class WebSocketManager(private val chatGroupRepository: ChatGroupRepository) {
         }
     }
 
+    // TODO 太丑了，以后重构
     @Suppress("UNCHECKED_CAST")
     private fun <T: Any> encodeWebSocketResponse(message: WebSocketResponse<T>): String {
         val serializer = when (val payload = message.response) {
             is NewChatMessagePayload -> NewChatMessagePayload.serializer() as KSerializer<T>
-            is UserJoinedChatPayload -> UserJoinedChatPayload.serializer() as KSerializer<T>
-            is UserLeftChatPayload -> UserLeftChatPayload.serializer() as KSerializer<T>
+            is UserChatPayload -> UserChatPayload.serializer() as KSerializer<T>
             is NewOwnerPayload -> NewOwnerPayload.serializer() as KSerializer<T>
             is ChatDisbandedPayload -> ChatDisbandedPayload.serializer() as KSerializer<T>
             is RoomAccessRequest -> RoomAccessRequest.serializer() as KSerializer<T>
             is RoomAccessResponse -> RoomAccessResponse.serializer() as KSerializer<T>
+            is ChatGroupChange -> ChatGroupChange.serializer() as KSerializer<T>
+            is ChatMessage -> ChatMessage.serializer() as KSerializer<T>
+            is ChatMessageResponse -> ChatMessageResponse.serializer() as KSerializer<T>
+            is ChatStateSyncPayload -> ChatStateSyncPayload.serializer() as KSerializer<T>
             is String -> String.serializer() as KSerializer<T>
             else -> throw IllegalArgumentException("Unknown payload type for WebSocketResponse: ${payload::class.simpleName}")
         }

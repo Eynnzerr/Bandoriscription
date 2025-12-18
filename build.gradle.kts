@@ -46,6 +46,7 @@ dependencies {
     implementation(libs.kotlin.reflect)
     implementation(libs.ktor.server.config.yaml)
     implementation(libs.ktor.server.rate.limit)
+    implementation(libs.sensitive.word)
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.kotlin.test.junit)
 }

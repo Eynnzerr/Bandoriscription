@@ -1,7 +1,6 @@
 package com.eynnzerr.model
 
 import kotlinx.serialization.Serializable
-import com.eynnzerr.model.UserInfo // Import UserInfo from Response.kt
 
 /**
  * WebSocket请求消息
@@ -78,12 +77,14 @@ object WebSocketActions {
     const val NEW_OWNER_ASSIGNED = "new_owner_assigned" // server -> app 用户被指派为新房主
     const val OWNER_CHANGED = "owner_changed" // server -> app 房主变更通知
     const val CHAT_STATE_SYNC = "chat_state_sync" // server -> app 用户重连后同步当前聊天室状态
+    const val CHAT_GROUP_CHANGE = "new_chat_group" // server -> app 有聊天室状态发生改变时推送
 }
 
 @Serializable
 data class ChatStateSyncPayload(
     val groupId: String,
     val ownerId: String,
+    val name: String,
     val members: List<UserInfo>,
     val recentMessages: List<ChatMessageInfo>
 )
@@ -118,15 +119,9 @@ data class ChatMessageInfo(
 )
 
 @Serializable
-data class UserJoinedChatPayload(
+data class UserChatPayload(
     val groupId: String,
-    val user: UserInfo
-)
-
-@Serializable
-data class UserLeftChatPayload(
-    val groupId: String,
-    val userId: String
+    val user: OwnerInfo,
 )
 
 @Serializable
